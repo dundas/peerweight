@@ -1,0 +1,59 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://peerweight.org/schemas/identity.json",
+  "title": "PeerWeight Identity",
+  "description": "Identity document for PeerWeight DIDs",
+  "type": "object",
+  "required": ["type", "did", "publicKey", "created"],
+  "properties": {
+    "type": {
+      "type": "string",
+      "const": "PeerWeightIdentity",
+      "description": "Must be 'PeerWeightIdentity'"
+    },
+    "did": {
+      "type": "string",
+      "pattern": "^did:peerweight:",
+      "description": "The DID being described",
+      "examples": [
+        "did:peerweight:example.com",
+        "did:peerweight:bsky:alice.bsky.social",
+        "did:peerweight:mastodon:alice@mastodon.social",
+        "did:peerweight:nostr:npub1...",
+        "did:peerweight:youtube:UCxxxxx",
+        "did:peerweight:seed:z6Mk..."
+      ]
+    },
+    "publicKey": {
+      "type": "object",
+      "required": ["id", "type", "publicKeyMultibase"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Key identifier, recommended: {did}#key-1"
+        },
+        "type": {
+          "type": "string",
+          "const": "Ed25519VerificationKey2020",
+          "description": "Must be Ed25519VerificationKey2020"
+        },
+        "publicKeyMultibase": {
+          "type": "string",
+          "pattern": "^z[1-9A-HJ-NP-Za-km-z]+$",
+          "description": "Multibase base58btc-encoded Ed25519 public key (prefix 'z')"
+        }
+      }
+    },
+    "created": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of creation"
+    },
+    "updated": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp of last update"
+    }
+  },
+  "additionalProperties": false
+}

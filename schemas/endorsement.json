@@ -1,0 +1,147 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://peerweight.org/schemas/endorsement.json",
+  "title": "PeerWeight Endorsement",
+  "description": "Signed recommendation that affects trust propagation and ranking",
+  "type": "object",
+  "required": ["type", "id", "issuer", "subject", "weight", "disclosure", "categories", "issued", "proof"],
+  "properties": {
+    "type": {
+      "type": "string",
+      "const": "PeerWeightEndorsement",
+      "description": "Must be 'PeerWeightEndorsement'"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^urn:uuid:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "description": "UUID URN identifier",
+      "examples": ["urn:uuid:550e8400-e29b-41d4-a716-446655440000"]
+    },
+    "issuer": {
+      "type": "string",
+      "pattern": "^did:peerweight:",
+      "description": "DID of the endorser"
+    },
+    "subject": {
+      "type": "object",
+      "description": "Resource being endorsed",
+      "required": ["resourceType"],
+      "oneOf": [
+        { "required": ["url", "resourceType"] },
+        { "required": ["id", "resourceType"] }
+      ],
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri",
+          "description": "Canonicalized URL of the resource"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^did:peerweight:",
+          "description": "DID for domain/profile subjects"
+        },
+        "resourceType": {
+          "type": "string",
+          "enum": ["domain", "profile", "page", "post", "product", "service", "component"],
+          "description": "Type of resource being endorsed"
+        },
+        "product": {
+          "type": "object",
+          "description": "Product metadata",
+          "properties": {
+            "name": { "type": "string" },
+            "brand": { "type": "string" },
+            "model": { "type": "string" },
+            "sku": { "type": "string" }
+          }
+        },
+        "service": {
+          "type": "object",
+          "description": "Service metadata",
+          "properties": {
+            "name": { "type": "string" },
+            "provider": { "type": "string" }
+          }
+        },
+        "selector": {
+          "type": "string",
+          "description": "Reserved for future inline annotations (RFC 3986 fragment selectors)"
+        }
+      }
+    },
+    "weight": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 5,
+      "description": "Strength of recommendation (1=weak, 5=strongest)"
+    },
+    "disclosure": {
+      "type": "string",
+      "enum": ["purchased", "editorial", "gifted", "affiliate", "paid", "partner", "self"],
+      "description": "Endorser's incentive and relationship to the subject"
+    },
+    "categories": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 5,
+      "items": {
+        "type": "string",
+        "pattern": "^[a-z0-9-]+(/[a-z0-9-]+)*$",
+        "description": "Category path using forward slashes"
+      },
+      "description": "1-5 category paths",
+      "examples": [
+        ["commerce/kitchen/knives"],
+        ["research/computer-science/distributed-systems", "research/cryptography"]
+      ]
+    },
+    "claim": {
+      "type": "string",
+      "maxLength": 280,
+      "description": "Short summary of the endorsement"
+    },
+    "review": {
+      "type": "string",
+      "maxLength": 10000,
+      "description": "Long-form review (markdown allowed)"
+    },
+    "issued": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp when endorsement was issued"
+    },
+    "proof": {
+      "type": "object",
+      "required": ["type", "proofValue"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "Ed25519Signature2020"
+        },
+        "proofValue": {
+          "type": "string",
+          "pattern": "^z[1-9A-HJ-NP-Za-km-z]+$",
+          "description": "Multibase base58btc-encoded signature"
+        }
+      },
+      "description": "Ed25519 signature over canonical JSON"
+    },
+    "is_ai": {
+      "type": "boolean",
+      "description": "True if issuer is an AI agent"
+    },
+    "operator": {
+      "type": "string",
+      "pattern": "^did:peerweight:",
+      "description": "DID of human operator when is_ai=true"
+    }
+  },
+  "additionalProperties": false,
+  "if": {
+    "properties": { "is_ai": { "const": true } }
+  },
+  "then": {
+    "required": ["operator"]
+  }
+}

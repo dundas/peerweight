@@ -1,0 +1,319 @@
+openapi: 3.0.3
+info:
+  title: PeerWeight Aggregator API
+  description: |
+    REST API for the PeerWeight reference aggregator implementation.
+
+    An aggregator crawls well-known endpoints from DIDs, indexes endorsements and notes,
+    and provides query APIs for personalized trust-based discovery.
+
+    **Note:** This is a reference implementation. Production aggregators may extend
+    this API with additional features like trust graph computation, filtering, and caching.
+  version: 0.1.0
+  contact:
+    name: PeerWeight Protocol
+    url: https://peerweight.org
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:3000
+    description: Local development server
+  - url: https://aggregator.peerweight.org
+    description: Example production aggregator
+
+tags:
+  - name: Endorsements
+    description: Query endorsements
+  - name: Notes
+    description: Query notes and discussions
+  - name: Admin
+    description: Administrative operations
+
+paths:
+  /:
+    get:
+      summary: Health check
+      description: Returns aggregator status and version
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "PeerWeight Aggregator Running"
+                  version:
+                    type: string
+                    example: "0.1.0"
+
+  /v1/endorsements:
+    get:
+      tags:
+        - Endorsements
+      summary: Get endorsements for a subject
+      description: |
+        Returns all endorsements for a given subject URL or DID.
+
+        Results are ordered by issued timestamp (newest first).
+      parameters:
+        - name: subject
+          in: query
+          required: true
+          description: URL or DID of the subject being endorsed
+          schema:
+            type: string
+            example: "https://example.com/product"
+      responses:
+        '200':
+          description: List of endorsements
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Endorsement'
+        '400':
+          description: Missing or invalid subject parameter
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: "Missing subject parameter"
+
+  /v1/notes:
+    get:
+      tags:
+        - Notes
+      summary: Get notes for a subject
+      description: |
+        Returns all notes (comments, discussions) for a given subject URL or DID.
+
+        Results are ordered by issued timestamp (oldest first) to support threading.
+      parameters:
+        - name: subject
+          in: query
+          required: true
+          description: URL or DID of the subject being discussed
+          schema:
+            type: string
+            example: "https://example.com/article"
+      responses:
+        '200':
+          description: List of notes
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Note'
+        '400':
+          description: Missing or invalid subject parameter
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+
+  /v1/crawl:
+    post:
+      tags:
+        - Admin
+      summary: Trigger crawl of a domain
+      description: |
+        Manually trigger the aggregator to crawl a domain's well-known endpoints.
+
+        The crawl runs asynchronously. This endpoint returns immediately with confirmation.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - domain
+              properties:
+                domain:
+                  type: string
+                  description: Domain to crawl
+                  example: "example.com"
+      responses:
+        '200':
+          description: Crawl started successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: "Crawl started"
+                  domain:
+                    type: string
+                    example: "example.com"
+        '400':
+          description: Missing or invalid domain
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+
+components:
+  schemas:
+    Endorsement:
+      type: object
+      required:
+        - type
+        - id
+        - issuer
+        - subject
+        - weight
+        - disclosure
+        - categories
+        - issued
+        - proof
+      properties:
+        type:
+          type: string
+          const: "PeerWeightEndorsement"
+        id:
+          type: string
+          pattern: "^urn:uuid:"
+          example: "urn:uuid:550e8400-e29b-41d4-a716-446655440000"
+        issuer:
+          type: string
+          pattern: "^did:peerweight:"
+          example: "did:peerweight:example.com"
+        subject:
+          oneOf:
+            - $ref: '#/components/schemas/URLSubject'
+            - $ref: '#/components/schemas/DIDSubject'
+        weight:
+          type: integer
+          minimum: 1
+          maximum: 5
+          description: "Strength of recommendation (1=weak, 5=strongest)"
+        disclosure:
+          type: string
+          enum: [purchased, editorial, gifted, affiliate, paid, partner, self]
+          description: "Endorser's incentive"
+        categories:
+          type: array
+          minItems: 1
+          maxItems: 5
+          items:
+            type: string
+            pattern: "^[a-z0-9-]+(/[a-z0-9-]+)*$"
+          example: ["commerce/kitchen/knives"]
+        claim:
+          type: string
+          maxLength: 280
+          description: "Short summary"
+        review:
+          type: string
+          maxLength: 10000
+          description: "Long-form review (markdown)"
+        issued:
+          type: string
+          format: date-time
+        is_ai:
+          type: boolean
+          description: "True if issuer is an AI agent"
+        operator:
+          type: string
+          pattern: "^did:peerweight:"
+          description: "Human operator DID when is_ai=true"
+        proof:
+          $ref: '#/components/schemas/Proof'
+
+    Note:
+      type: object
+      required:
+        - type
+        - id
+        - issuer
+        - text
+        - issued
+        - proof
+      properties:
+        type:
+          type: string
+          const: "PeerWeightNote"
+        id:
+          type: string
+          pattern: "^urn:uuid:"
+        issuer:
+          type: string
+          pattern: "^did:peerweight:"
+        subject:
+          oneOf:
+            - $ref: '#/components/schemas/URLSubject'
+            - $ref: '#/components/schemas/DIDSubject'
+        replyTo:
+          type: string
+          pattern: "^urn:uuid:"
+          description: "UUID of parent note (for threading)"
+        text:
+          type: string
+          maxLength: 10000
+        issued:
+          type: string
+          format: date-time
+        is_ai:
+          type: boolean
+        operator:
+          type: string
+          pattern: "^did:peerweight:"
+        proof:
+          $ref: '#/components/schemas/Proof'
+
+    URLSubject:
+      type: object
+      required:
+        - url
+        - resourceType
+      properties:
+        url:
+          type: string
+          format: uri
+        resourceType:
+          type: string
+          enum: [domain, profile, page, post, product, service, component]
+
+    DIDSubject:
+      type: object
+      required:
+        - id
+        - resourceType
+      properties:
+        id:
+          type: string
+          pattern: "^did:peerweight:"
+        resourceType:
+          type: string
+          enum: [domain, profile]
+
+    Proof:
+      type: object
+      required:
+        - type
+        - proofValue
+      properties:
+        type:
+          type: string
+          const: "Ed25519Signature2020"
+        proofValue:
+          type: string
+          pattern: "^z[1-9A-HJ-NP-Za-km-z]+$"
+          description: "Multibase base58btc-encoded signature"

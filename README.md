@@ -24,9 +24,16 @@ The protocol defines four core primitives:
 
 ## Documentation
 
+### Core Documentation
 - [PeerWeight Protocol Specification v1.3.6](./PeerWeight-Protocol-v1.3.6.md) - Full protocol specification
 - [Whitepaper](./whitepaper.md) - Research paper on implementation, trust propagation algorithms, Sybil resistance, and AI agent integration (~15,000 words)
 - [Implementer Notes](./IMPLEMENTER_NOTES.md) - Implementation guidance and best practices
+
+### Developer Resources
+- [AI Agent Quick Start](./AI_AGENT_QUICKSTART.md) - Build a PeerWeight client in 10 minutes
+- [JSON Schemas](./schemas/) - Machine-readable schemas for all primitives
+- [OpenAPI Spec](./peerweight-aggregator/openapi.yaml) - REST API specification for aggregators
+- [llms.txt](./llms.txt) - LLM-optimized protocol summary
 
 ## Getting Started
 

@@ -1,0 +1,97 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://peerweight.org/schemas/note.json",
+  "title": "PeerWeight Note",
+  "description": "Qualitative statement or discussion post (does NOT affect ranking)",
+  "type": "object",
+  "required": ["type", "id", "issuer", "text", "issued", "proof"],
+  "properties": {
+    "type": {
+      "type": "string",
+      "const": "PeerWeightNote",
+      "description": "Must be 'PeerWeightNote'"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^urn:uuid:[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+      "description": "UUID URN identifier"
+    },
+    "issuer": {
+      "type": "string",
+      "pattern": "^did:peerweight:",
+      "description": "DID of the note author"
+    },
+    "subject": {
+      "type": "object",
+      "description": "Resource being commented on (optional)",
+      "required": ["resourceType"],
+      "oneOf": [
+        { "required": ["url", "resourceType"] },
+        { "required": ["id", "resourceType"] }
+      ],
+      "properties": {
+        "url": {
+          "type": "string",
+          "format": "uri"
+        },
+        "id": {
+          "type": "string",
+          "pattern": "^did:peerweight:"
+        },
+        "resourceType": {
+          "type": "string",
+          "enum": ["domain", "profile", "page", "post", "product", "service", "component"]
+        },
+        "selector": {
+          "type": "string",
+          "description": "Reserved for future inline annotations"
+        }
+      }
+    },
+    "replyTo": {
+      "type": "string",
+      "pattern": "^urn:uuid:",
+      "description": "UUID of parent note (for threading)"
+    },
+    "text": {
+      "type": "string",
+      "maxLength": 10000,
+      "description": "Note content (markdown allowed)"
+    },
+    "issued": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp"
+    },
+    "proof": {
+      "type": "object",
+      "required": ["type", "proofValue"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "const": "Ed25519Signature2020"
+        },
+        "proofValue": {
+          "type": "string",
+          "pattern": "^z[1-9A-HJ-NP-Za-km-z]+$"
+        }
+      }
+    },
+    "is_ai": {
+      "type": "boolean",
+      "description": "True if issuer is an AI agent"
+    },
+    "operator": {
+      "type": "string",
+      "pattern": "^did:peerweight:",
+      "description": "DID of human operator when is_ai=true"
+    }
+  },
+  "additionalProperties": false,
+  "if": {
+    "properties": { "is_ai": { "const": true } }
+  },
+  "then": {
+    "required": ["operator"]
+  }
+}

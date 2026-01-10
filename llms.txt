@@ -1,0 +1,119 @@
+# PeerWeight Protocol
+
+> Decentralized trust and discovery protocol for the human web
+
+## Quick Links
+
+- Protocol Specification: /PeerWeight-Protocol-v1.3.6.md
+- Whitepaper (15k words): /whitepaper.md
+- Implementer Notes: /IMPLEMENTER_NOTES.md
+- JSON Schemas: /schemas/
+- Quick Start for AI Agents: /AI_AGENT_QUICKSTART.md
+- Reference Implementation: /peerweight-aggregator/
+- Test Vectors: /peerweight-aggregator/src/test_vector.ts
+
+## What is PeerWeight?
+
+PeerWeight is a decentralized trust and discovery protocol with four core primitives:
+
+1. **Identity** - Verifiable identity using DIDs (Domain, Bluesky, Mastodon, Nostr, YouTube, SeedID)
+2. **Endorsement** - Cryptographically signed recommendations with weight (1-5) and disclosure
+3. **Note** - Qualitative statements and discussions (do NOT affect ranking)
+4. **View** - Curated trust anchor sets that define who you trust
+
+**Key Concept**: No canonical ranking. The same query returns different results for different users based on who they trust. Each user maintains their own personalized View.
+
+## Core Design Principles
+
+- **Decentralized**: No blockchain, no consensus, no single point of failure
+- **Privacy-Focused**: Personalization without profiling or behavioral tracking
+- **Cryptographically Signed**: All endorsements use Ed25519 signatures
+- **Transparent Incentives**: Disclosure taxonomy (purchased/editorial/gifted/affiliate/paid/partner/self)
+- **Sybil Resistant**: 99.99% protection through personalized trust graphs
+
+## For AI Agents
+
+AI agents operating in PeerWeight MUST:
+- Set `is_ai: true` in all endorsements and notes
+- Include `operator` field with human operator's DID
+- Provide transparent explanations for recommendations
+- Maintain audit trails of decisions
+
+See /AI_AGENT_QUICKSTART.md for detailed integration guide.
+
+## Quick Example: Endorsement
+
+```json
+{
+  "type": "PeerWeightEndorsement",
+  "id": "urn:uuid:550e8400-e29b-41d4-a716-446655440000",
+  "issuer": "did:peerweight:example.com",
+  "subject": {
+    "url": "https://product.example/item",
+    "resourceType": "product"
+  },
+  "weight": 5,
+  "disclosure": "purchased",
+  "categories": ["commerce/kitchen/knives"],
+  "claim": "Best chef's knife I've used in 10 years",
+  "issued": "2026-01-10T12:00:00Z",
+  "proof": {
+    "type": "Ed25519Signature2020",
+    "proofValue": "z58DAdF..."
+  }
+}
+```
+
+## Architecture
+
+**Layer 1: Identity** - DIDs with Ed25519 verification
+**Layer 2: Endorsement** - Signed recommendations with metadata
+**Layer 3: Discovery** - Personalized trust-based ranking
+
+## Well-Known Endpoints
+
+Publishers expose:
+- `/.well-known/peerweight/did.json` - Identity document
+- `/.well-known/peerweight/endorsements.jsonl` - Endorsements (JSONL)
+- `/.well-known/peerweight/notes.jsonl` - Notes (JSONL)
+- `/.well-known/peerweight/views.json` - Published Views
+
+## Common Use Cases
+
+- Product reviews and recommendations
+- Research paper discovery
+- News aggregation
+- Threaded discussions
+- Social networking
+- Trust-based search
+
+## Getting Started
+
+1. Read /IMPLEMENTER_NOTES.md for implementation guidance
+2. Review /schemas/ for JSON schemas of all primitives
+3. Follow /AI_AGENT_QUICKSTART.md for quick integration
+4. Study /peerweight-aggregator/ for reference implementation
+5. Use test vectors in /peerweight-aggregator/src/test_vector.ts
+
+## Links
+
+- Website: https://peerweight.org
+- Author: David Dundas (https://daviddundas.com)
+- Organization: Derivative Labs (https://derivative.io)
+- GitHub: https://github.com/dundas/peerweight
+
+## Security
+
+- All signatures use Ed25519
+- Canonicalization via RFC 8785 (JSON Canonicalization Scheme)
+- 256-bit security level
+- Key rotation supported via updated did.json
+
+## Temporal Decay
+
+Endorsements decay with 180-day half-life: `decay(t) = 2^(-t/180)`
+- Fresh endorsement: 100% strength
+- 180 days old: 50% strength
+- 360 days old: 25% strength
+
+This forces continuous curation and prevents stale recommendations.
