@@ -1,11 +1,11 @@
 # PeerWeight Protocol: Implementation, Evaluation, and AI Agent Integration
 ## A Companion Research Paper
 
-**Version 1.0**  
+**Version 1.0**
 **January 2026**
 
-**Authors:** David Dundas
-**Affiliation:** Derivative Labs
+**Author:** David Dundas ([daviddundas.com](https://daviddundas.com))
+**Affiliation:** Derivative Labs ([derivative.io](https://derivative.io))
 
 ---
 
