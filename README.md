@@ -25,6 +25,7 @@ The protocol defines four core primitives:
 ## Documentation
 
 - [PeerWeight Protocol Specification v1.3.6](./PeerWeight-Protocol-v1.3.6.md) - Full protocol specification
+- [Whitepaper](./whitepaper.md) - Research paper on implementation, trust propagation algorithms, Sybil resistance, and AI agent integration (~15,000 words)
 - [Implementer Notes](./IMPLEMENTER_NOTES.md) - Implementation guidance and best practices
 
 ## Getting Started
