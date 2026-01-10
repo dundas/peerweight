@@ -4,7 +4,7 @@ A Decentralized Trust and Discovery Protocol for the Human Web
 
 **Version:** 1.3.6  
 **Date:** January 2026  
-**Author:** Derivative Labs  
+**Author:** David Dundas @ Derivative Labs  
 **Website:** peerweight.org
 
 ---
