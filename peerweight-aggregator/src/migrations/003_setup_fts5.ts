@@ -20,7 +20,7 @@ export const migration003: Migration = {
     db.run(`
       CREATE TRIGGER IF NOT EXISTS endorsements_fts_insert AFTER INSERT ON endorsements BEGIN
         INSERT INTO endorsements_fts(rowid, id, claim, review)
-        VALUES (new.rowid, new.id, new.claim, new.review);
+        VALUES (new.rowid, new.id, COALESCE(new.claim, ''), COALESCE(new.review, ''));
       END;
     `);
 
@@ -34,7 +34,7 @@ export const migration003: Migration = {
       CREATE TRIGGER IF NOT EXISTS endorsements_fts_update AFTER UPDATE ON endorsements BEGIN
         DELETE FROM endorsements_fts WHERE rowid = old.rowid;
         INSERT INTO endorsements_fts(rowid, id, claim, review)
-        VALUES (new.rowid, new.id, new.claim, new.review);
+        VALUES (new.rowid, new.id, COALESCE(new.claim, ''), COALESCE(new.review, ''));
       END;
     `);
 
@@ -52,7 +52,7 @@ export const migration003: Migration = {
     db.run(`
       CREATE TRIGGER IF NOT EXISTS notes_fts_insert AFTER INSERT ON notes BEGIN
         INSERT INTO notes_fts(rowid, id, text)
-        VALUES (new.rowid, new.id, new.text);
+        VALUES (new.rowid, new.id, COALESCE(new.text, ''));
       END;
     `);
 
@@ -66,20 +66,39 @@ export const migration003: Migration = {
       CREATE TRIGGER IF NOT EXISTS notes_fts_update AFTER UPDATE ON notes BEGIN
         DELETE FROM notes_fts WHERE rowid = old.rowid;
         INSERT INTO notes_fts(rowid, id, text)
-        VALUES (new.rowid, new.id, new.text);
+        VALUES (new.rowid, new.id, COALESCE(new.text, ''));
       END;
     `);
 
     // Populate FTS tables with existing data
+    const endorsementCount = db.query('SELECT COUNT(*) as count FROM endorsements').get() as any;
+    const notesCount = db.query('SELECT COUNT(*) as count FROM notes').get() as any;
+
+    console.log(`Populating FTS with ${endorsementCount.count} existing endorsements...`);
     db.run(`
       INSERT INTO endorsements_fts(rowid, id, claim, review)
-      SELECT rowid, id, claim, review FROM endorsements;
+      SELECT rowid, id, COALESCE(claim, ''), COALESCE(review, '') FROM endorsements;
     `);
 
+    if (endorsementCount.count > 0) {
+      const indexed = db.query('SELECT COUNT(*) as count FROM endorsements_fts').get() as any;
+      console.log(`✓ Indexed ${indexed.count} endorsements`);
+    } else {
+      console.log('ℹ No existing endorsements to index');
+    }
+
+    console.log(`Populating FTS with ${notesCount.count} existing notes...`);
     db.run(`
       INSERT INTO notes_fts(rowid, id, text)
-      SELECT rowid, id, text FROM notes;
+      SELECT rowid, id, COALESCE(text, '') FROM notes;
     `);
+
+    if (notesCount.count > 0) {
+      const indexed = db.query('SELECT COUNT(*) as count FROM notes_fts').get() as any;
+      console.log(`✓ Indexed ${indexed.count} notes`);
+    } else {
+      console.log('ℹ No existing notes to index');
+    }
 
     console.log('✓ FTS5 search tables created and populated');
   },

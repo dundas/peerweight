@@ -42,9 +42,29 @@ export class MigrationRunner {
   }
 
   /**
+   * Validate that migrations are provided in ascending ID order
+   */
+  private validateMigrationOrder(migrations: Migration[]): void {
+    if (migrations.length === 0) return;
+
+    for (let i = 1; i < migrations.length; i++) {
+      if (migrations[i].id <= migrations[i - 1].id) {
+        throw new Error(
+          `Migrations must be provided in ascending ID order. ` +
+          `Migration ${migrations[i].id} (${migrations[i].name}) ` +
+          `comes after ${migrations[i - 1].id} (${migrations[i - 1].name})`
+        );
+      }
+    }
+  }
+
+  /**
    * Run pending migrations up to target (or all if target not specified)
    */
   up(migrations: Migration[], target?: number) {
+    // Validate migrations are sorted by ID
+    this.validateMigrationOrder(migrations);
+
     const applied = this.getAppliedMigrations();
     const lastApplied = applied.length > 0 ? Math.max(...applied) : 0;
 
@@ -61,6 +81,9 @@ export class MigrationRunner {
       console.log(`Running migration ${migration.id}: ${migration.name}`);
 
       try {
+        // Wrap migration in transaction for atomicity
+        this.db.run('BEGIN TRANSACTION');
+
         migration.up(this.db);
 
         this.db.run(
@@ -72,8 +95,17 @@ export class MigrationRunner {
           }
         );
 
+        this.db.run('COMMIT');
+
         console.log(`✓ Migration ${migration.id} applied successfully`);
       } catch (error) {
+        // Rollback transaction on failure
+        try {
+          this.db.run('ROLLBACK');
+        } catch (rollbackError) {
+          console.error('Failed to rollback transaction:', rollbackError);
+        }
+
         console.error(`✗ Migration ${migration.id} failed:`, error);
         throw error;
       }
@@ -84,6 +116,9 @@ export class MigrationRunner {
    * Rollback migrations down to target (or rollback last if target not specified)
    */
   down(migrations: Migration[], target?: number) {
+    // Validate migrations are sorted by ID
+    this.validateMigrationOrder(migrations);
+
     const applied = this.getAppliedMigrations();
 
     if (applied.length === 0) {
@@ -107,14 +142,26 @@ export class MigrationRunner {
       console.log(`Rolling back migration ${migration.id}: ${migration.name}`);
 
       try {
+        // Wrap rollback in transaction for atomicity
+        this.db.run('BEGIN TRANSACTION');
+
         migration.down(this.db);
 
         this.db.run('DELETE FROM schema_migrations WHERE id = $id', {
           $id: migration.id
         });
 
+        this.db.run('COMMIT');
+
         console.log(`✓ Migration ${migration.id} rolled back successfully`);
       } catch (error) {
+        // Rollback transaction on failure
+        try {
+          this.db.run('ROLLBACK');
+        } catch (rollbackError) {
+          console.error('Failed to rollback transaction:', rollbackError);
+        }
+
         console.error(`✗ Migration ${migration.id} rollback failed:`, error);
         throw error;
       }
