@@ -41,3 +41,11 @@ internal/
 
 # npm lockfile (using Bun)
 package-lock.json
+
+# agentbootup-generated local tooling
+.claude/
+.codex/
+.gemini/
+.windsurf/
+ai-dev-tasks/
+scripts/
