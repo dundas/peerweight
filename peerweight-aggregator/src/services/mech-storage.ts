@@ -200,12 +200,28 @@ export const mechStorage = {
   /**
    * Execute a custom SQL query (read-only)
    * Uses POST /api/apps/{appId}/postgresql/query
+   * Note: Table names in SQL should use the logical name (e.g., 'identities')
+   * The API automatically resolves to the physical table name
    */
   async rawQuery<T>(sql: string, params: any[] = []): Promise<T[]> {
-    const result = await request<{ success: boolean; data: { rows: T[] } }>(`/postgresql/query`, {
+    const result = await request<{ success: boolean; rows: T[] }>(`/postgresql/query`, {
       method: 'POST',
-      body: JSON.stringify({ query: sql, params }),
+      body: JSON.stringify({ sql, params }),
     });
-    return result.data.rows;
+    return result.rows || [];
+  },
+
+  /**
+   * Query all records from a table using raw SQL
+   * Use this for tables with non-id primary keys (like identities)
+   */
+  async queryAll<T>(tableName: string): Promise<T[]> {
+    // Get app ID to construct full table name
+    const appId = MECH_APP_ID!.replace(/-/g, '_');
+    const schemaName = appId.startsWith('app_') ? appId : `app_${appId}`;
+    const physicalName = `${tableName}_${appId}`;
+
+    const sql = `SELECT * FROM "${schemaName}"."${physicalName}"`;
+    return this.rawQuery<T>(sql);
   },
 };
