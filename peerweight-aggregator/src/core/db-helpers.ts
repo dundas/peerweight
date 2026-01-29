@@ -1,8 +1,8 @@
-import type { Database } from 'bun:sqlite';
-import { db } from './db';
+import { mechStorage } from '../services/mech-storage';
 
 /**
  * Type-safe query helpers for common database operations
+ * Uses mech-storage PostgreSQL backend
  */
 
 export interface Endorsement {
@@ -10,12 +10,12 @@ export interface Endorsement {
   issuer: string;
   subject_url: string | null;
   subject_id: string | null;
-  weight: number;
-  disclosure: string;
-  categories: string; // JSON array
+  weight: number | null;
+  disclosure: string | null;
+  categories: string[] | null;
   claim: string | null;
   review: string | null;
-  issued: string;
+  issued: string | null;
   proof_value: string | null;
 }
 
@@ -25,8 +25,8 @@ export interface Note {
   subject_url: string | null;
   subject_id: string | null;
   reply_to: string | null;
-  text: string;
-  issued: string;
+  text: string | null;
+  issued: string | null;
   proof_value: string | null;
 }
 
@@ -40,7 +40,7 @@ export interface Identity {
 }
 
 export interface CrawlLog {
-  id: number;
+  id: string;
   domain: string;
   started_at: string;
   completed_at: string | null;
@@ -50,155 +50,244 @@ export interface CrawlLog {
   notes_found: number;
 }
 
+export interface BlacklistedDomain {
+  domain: string;
+  reason: string | null;
+  blacklisted_at: string;
+}
+
 /**
  * Get all endorsements for a given subject (URL or DID)
  */
-export function getEndorsementsBySubject(subject: string, database: Database = db): Endorsement[] {
-  const results = database.query(`
-    SELECT * FROM endorsements
-    WHERE subject_url = $subject OR subject_id = $subject
-    ORDER BY issued DESC
-  `).all({ $subject: subject });
+export async function getEndorsementsBySubject(subject: string): Promise<Endorsement[]> {
+  const byUrl = await mechStorage.query<Endorsement>('endorsements', {
+    where: { subject_url: subject },
+    orderBy: 'issued',
+    orderDir: 'DESC',
+  });
+  const byId = await mechStorage.query<Endorsement>('endorsements', {
+    where: { subject_id: subject },
+    orderBy: 'issued',
+    orderDir: 'DESC',
+  });
 
-  return results as Endorsement[];
+  // Dedupe by id
+  const seen = new Set<string>();
+  const results: Endorsement[] = [];
+  for (const e of [...byUrl, ...byId]) {
+    if (!seen.has(e.id)) {
+      seen.add(e.id);
+      results.push(e);
+    }
+  }
+  return results;
 }
 
 /**
  * Get all notes for a given subject (URL or DID)
  */
-export function getNotesBySubject(subject: string, database: Database = db): Note[] {
-  const results = database.query(`
-    SELECT * FROM notes
-    WHERE subject_url = $subject OR subject_id = $subject
-    ORDER BY issued ASC
-  `).all({ $subject: subject });
+export async function getNotesBySubject(subject: string): Promise<Note[]> {
+  const byUrl = await mechStorage.query<Note>('notes', {
+    where: { subject_url: subject },
+    orderBy: 'issued',
+    orderDir: 'ASC',
+  });
+  const byId = await mechStorage.query<Note>('notes', {
+    where: { subject_id: subject },
+    orderBy: 'issued',
+    orderDir: 'ASC',
+  });
 
-  return results as Note[];
+  const seen = new Set<string>();
+  const results: Note[] = [];
+  for (const n of [...byUrl, ...byId]) {
+    if (!seen.has(n.id)) {
+      seen.add(n.id);
+      results.push(n);
+    }
+  }
+  return results;
 }
 
 /**
  * Get all endorsements issued by a specific DID
  */
-export function getEndorsementsByIssuer(issuer: string, database: Database = db): Endorsement[] {
-  const results = database.query(`
-    SELECT * FROM endorsements
-    WHERE issuer = $issuer
-    ORDER BY issued DESC
-  `).all({ $issuer: issuer });
-
-  return results as Endorsement[];
+export async function getEndorsementsByIssuer(issuer: string): Promise<Endorsement[]> {
+  return mechStorage.query<Endorsement>('endorsements', {
+    where: { issuer },
+    orderBy: 'issued',
+    orderDir: 'DESC',
+  });
 }
 
 /**
  * Get identity by DID
  */
-export function getIdentityByDid(did: string, database: Database = db): Identity | null {
-  const result = database.query('SELECT * FROM identities WHERE did = $did').get({ $did: did });
-  return result as Identity | null;
+export async function getIdentityByDid(did: string): Promise<Identity | null> {
+  return mechStorage.getById<Identity>('identities', did);
 }
 
 /**
  * Get identity by domain
  */
-export function getIdentityByDomain(domain: string, database: Database = db): Identity | null {
-  const result = database.query('SELECT * FROM identities WHERE domain = $domain').get({ $domain: domain });
-  return result as Identity | null;
+export async function getIdentityByDomain(domain: string): Promise<Identity | null> {
+  const results = await mechStorage.query<Identity>('identities', {
+    where: { domain },
+    limit: 1,
+  });
+  return results[0] || null;
 }
 
 /**
  * Check if a domain is blacklisted
  */
-export function isBlacklisted(domain: string, database: Database = db): boolean {
-  const result = database.query('SELECT domain FROM blacklisted_domains WHERE domain = $domain').get({ $domain: domain });
+export async function isBlacklisted(domain: string): Promise<boolean> {
+  const result = await mechStorage.getById<BlacklistedDomain>('blacklisted_domains', domain);
   return result !== null;
 }
 
 /**
  * Add a domain to the blacklist
  */
-export function addToBlacklist(domain: string, reason: string | null = null, database: Database = db): void {
-  database.run(
-    'INSERT OR REPLACE INTO blacklisted_domains (domain, reason, blacklisted_at) VALUES ($domain, $reason, $now)',
-    {
-      $domain: domain,
-      $reason: reason,
-      $now: new Date().toISOString()
-    }
-  );
+export async function addToBlacklist(domain: string, reason: string | null = null): Promise<void> {
+  const existing = await mechStorage.getById<BlacklistedDomain>('blacklisted_domains', domain);
+  if (existing) {
+    await mechStorage.update('blacklisted_domains', domain, {
+      reason,
+      blacklisted_at: new Date().toISOString(),
+    });
+  } else {
+    await mechStorage.insert('blacklisted_domains', {
+      domain,
+      reason,
+      blacklisted_at: new Date().toISOString(),
+    });
+  }
 }
 
 /**
  * Remove a domain from the blacklist
  */
-export function removeFromBlacklist(domain: string, database: Database = db): void {
-  database.run('DELETE FROM blacklisted_domains WHERE domain = $domain', { $domain: domain });
+export async function removeFromBlacklist(domain: string): Promise<void> {
+  await mechStorage.delete('blacklisted_domains', domain);
 }
 
 /**
  * Get recent crawl logs for a domain
  */
-export function getCrawlLogsByDomain(domain: string, limit: number = 10, database: Database = db): CrawlLog[] {
-  const results = database.query(`
-    SELECT * FROM crawl_logs
-    WHERE domain = $domain
-    ORDER BY started_at DESC
-    LIMIT $limit
-  `).all({ $domain: domain, $limit: limit });
-
-  return results as CrawlLog[];
+export async function getCrawlLogsByDomain(domain: string, limit: number = 10): Promise<CrawlLog[]> {
+  return mechStorage.query<CrawlLog>('crawl_logs', {
+    where: { domain },
+    orderBy: 'started_at',
+    orderDir: 'DESC',
+    limit,
+  });
 }
 
 /**
  * Get the most recent crawl log for a domain
  */
-export function getLatestCrawlLog(domain: string, database: Database = db): CrawlLog | null {
-  const result = database.query(`
-    SELECT * FROM crawl_logs
-    WHERE domain = $domain
-    ORDER BY started_at DESC
-    LIMIT 1
-  `).get({ $domain: domain });
-
-  return result as CrawlLog | null;
+export async function getLatestCrawlLog(domain: string): Promise<CrawlLog | null> {
+  const results = await mechStorage.query<CrawlLog>('crawl_logs', {
+    where: { domain },
+    orderBy: 'started_at',
+    orderDir: 'DESC',
+    limit: 1,
+  });
+  return results[0] || null;
 }
 
 /**
- * Get count of endorsements for a subject
+ * Create a crawl log entry
  */
-export function getEndorsementCount(subject: string, database: Database = db): number {
-  const result = database.query(`
-    SELECT COUNT(*) as count FROM endorsements
-    WHERE subject_url = $subject OR subject_id = $subject
-  `).get({ $subject: subject }) as any;
-
-  return result.count;
+export async function createCrawlLog(domain: string): Promise<CrawlLog> {
+  const log: Omit<CrawlLog, 'id'> & { id: string } = {
+    id: `crawl_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+    domain,
+    started_at: new Date().toISOString(),
+    completed_at: null,
+    status: 'pending',
+    error_message: null,
+    endorsements_found: 0,
+    notes_found: 0,
+  };
+  return mechStorage.insert('crawl_logs', log);
 }
 
 /**
- * Get count of notes for a subject
+ * Update a crawl log entry
  */
-export function getNoteCount(subject: string, database: Database = db): number {
-  const result = database.query(`
-    SELECT COUNT(*) as count FROM notes
-    WHERE subject_url = $subject OR subject_id = $subject
-  `).get({ $subject: subject }) as any;
-
-  return result.count;
+export async function updateCrawlLog(
+  id: string,
+  updates: Partial<Pick<CrawlLog, 'completed_at' | 'status' | 'error_message' | 'endorsements_found' | 'notes_found'>>
+): Promise<CrawlLog> {
+  return mechStorage.update('crawl_logs', id, updates);
 }
 
 /**
- * Get total counts for statistics
+ * Get database statistics
  */
-export function getDatabaseStats(database: Database = db) {
-  const identities = database.query('SELECT COUNT(*) as count FROM identities').get() as any;
-  const endorsements = database.query('SELECT COUNT(*) as count FROM endorsements').get() as any;
-  const notes = database.query('SELECT COUNT(*) as count FROM notes').get() as any;
-  const blacklisted = database.query('SELECT COUNT(*) as count FROM blacklisted_domains').get() as any;
+export async function getDatabaseStats(): Promise<{
+  totalIdentities: number;
+  totalEndorsements: number;
+  totalNotes: number;
+  totalBlacklisted: number;
+}> {
+  // Query each table and count results
+  const [identities, endorsements, notes, blacklisted] = await Promise.all([
+    mechStorage.query('identities', {}),
+    mechStorage.query('endorsements', {}),
+    mechStorage.query('notes', {}),
+    mechStorage.query('blacklisted_domains', {}).catch(() => []),
+  ]);
 
   return {
-    totalIdentities: identities.count,
-    totalEndorsements: endorsements.count,
-    totalNotes: notes.count,
-    totalBlacklisted: blacklisted.count
+    totalIdentities: identities.length,
+    totalEndorsements: endorsements.length,
+    totalNotes: notes.length,
+    totalBlacklisted: blacklisted.length,
   };
+}
+
+/**
+ * List all domains with their stats
+ */
+export async function listDomains(options: {
+  limit?: number;
+  offset?: number;
+  status?: 'success' | 'error' | 'pending';
+} = {}): Promise<Array<Identity & { endorsement_count: number; note_count: number; last_status?: string }>> {
+  const identities = await mechStorage.query<Identity>('identities', {
+    orderBy: 'last_crawled',
+    orderDir: 'DESC',
+    limit: options.limit,
+    offset: options.offset,
+  });
+
+  // Enrich with counts (could be optimized with aggregation queries)
+  const enriched = await Promise.all(
+    identities.map(async (identity) => {
+      const endorsements = await mechStorage.query('endorsements', {
+        where: { issuer: identity.did },
+      });
+      const notes = await mechStorage.query('notes', {
+        where: { issuer: identity.did },
+      });
+      const latestLog = await getLatestCrawlLog(identity.domain || '');
+
+      return {
+        ...identity,
+        endorsement_count: endorsements.length,
+        note_count: notes.length,
+        last_status: latestLog?.status,
+      };
+    })
+  );
+
+  // Filter by status if specified
+  if (options.status) {
+    return enriched.filter((d) => d.last_status === options.status);
+  }
+
+  return enriched;
 }
