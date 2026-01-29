@@ -142,27 +142,32 @@ export async function getIdentityByDomain(domain: string): Promise<Identity | nu
  * Check if a domain is blacklisted
  */
 export async function isBlacklisted(domain: string): Promise<boolean> {
-  const result = await mechStorage.getById<BlacklistedDomain>('blacklisted_domains', domain);
-  return result !== null;
+  // Use queryAll because blacklisted_domains has non-id primary key
+  try {
+    const all = await mechStorage.queryAll<BlacklistedDomain>('blacklisted_domains');
+    return all.some((b) => b.domain === domain);
+  } catch (err) {
+    // Table might not exist yet
+    return false;
+  }
 }
 
 /**
  * Add a domain to the blacklist
  */
 export async function addToBlacklist(domain: string, reason: string | null = null): Promise<void> {
-  const existing = await mechStorage.getById<BlacklistedDomain>('blacklisted_domains', domain);
+  // Check if already blacklisted using query (non-id primary key)
+  const existing = await isBlacklisted(domain);
   if (existing) {
-    await mechStorage.update('blacklisted_domains', domain, {
-      reason,
-      blacklisted_at: new Date().toISOString(),
-    });
-  } else {
-    await mechStorage.insert('blacklisted_domains', {
-      domain,
-      reason,
-      blacklisted_at: new Date().toISOString(),
-    });
+    // For tables with non-id primary keys, we need to delete and re-insert
+    // since update() uses the id column
+    await mechStorage.delete('blacklisted_domains', domain);
   }
+  await mechStorage.insert('blacklisted_domains', {
+    domain,
+    reason,
+    blacklisted_at: new Date().toISOString(),
+  });
 }
 
 /**
